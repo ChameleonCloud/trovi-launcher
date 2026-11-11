@@ -25,10 +25,11 @@ import os
 import signal
 import sys
 import time
-import urllib.request
 from collections.abc import Callable
 from types import FrameType
 from typing import Any, NoReturn
+
+import requests
 
 # Deletes one resource, given its kind and ID
 Delete = Callable[[str, str], None]
@@ -49,20 +50,15 @@ def post_event(event: dict[str, Any]) -> None:
     final status, the launcher marks the launch failed once it sees that this
     process has exited.
     """
-    body = json.dumps(event)
-    print(body, flush=True)
-    request = urllib.request.Request(
-        os.environ["CALLBACK_URL"],
-        data=body.encode(),
-        headers={
-            "Authorization": f"Bearer {os.environ['CALLBACK_TOKEN']}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
+    print(json.dumps(event), flush=True)
     for attempt in range(1, 4):
         try:
-            urllib.request.urlopen(request, timeout=30).close()
+            requests.post(
+                os.environ["CALLBACK_URL"],
+                json=event,
+                headers={"Authorization": f"Bearer {os.environ['CALLBACK_TOKEN']}"},
+                timeout=30,
+            ).raise_for_status()
             return
         except OSError as e:
             print(f"Report attempt {attempt} failed: {e}", file=sys.stderr)

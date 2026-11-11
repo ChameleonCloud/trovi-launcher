@@ -3,7 +3,7 @@ from datetime import timedelta
 from unittest import mock
 
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -18,9 +18,6 @@ FIELDS = {
 }
 
 
-@override_settings(
-    TROVI_LAUNCHER={"SITES": {}, "CALLBACK_BASE_URL": "http://launcher.test"}
-)
 class ServiceTests(TestCase):
     def setUp(self):
         self.runner = mock.Mock()

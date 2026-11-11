@@ -1,23 +1,13 @@
 from unittest import mock
 
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase
 from keystoneauth1 import exceptions as keystone_exceptions
 
 from trovi_launcher import credentials
 from trovi_launcher.models import Launch
 
-SITES = {
-    "CHI@UC": {"auth_url": "https://chi.uc.test:5000/v3", "audience": "keystone-uc"}
-}
 
-
-@override_settings(
-    TROVI_LAUNCHER={"SITES": SITES},
-    OIDC_OP_TOKEN_ENDPOINT="https://keycloak.test/token",
-    OIDC_RP_CLIENT_ID="portal",
-    OIDC_RP_CLIENT_SECRET="secret",
-)
 class ExchangeCredentialTests(SimpleTestCase):
     def setUp(self):
         self.launch = Launch(site="CHI@UC", project="CHI-000000")

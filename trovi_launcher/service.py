@@ -40,14 +40,14 @@ def clean_up_launch(launch, subject_token=None):
     _start(launch, env, cleanup=resources)
 
 
-def _start(launch, env, **extra_params):
+def _start(launch, env, cleanup=None):
     runner = runners.get(launch.runner)
     token = secrets.token_urlsafe(32)
     launch.callback_token_hash = _hash(token)
     launch.save()
     try:
         launch.runner_ref = runner.start(
-            launch, env | _provisioner_env(launch, token, extra_params)
+            launch, env | _provisioner_env(launch, token, cleanup)
         )
     except Exception as e:
         _finish(launch, Launch.Status.FAILED, f"Runner failed to start: {e}")
@@ -55,18 +55,21 @@ def _start(launch, env, **extra_params):
     launch.save(update_fields=["runner_ref", "updated_at"])
 
 
-def _provisioner_env(launch, token, extra_params):
+def _provisioner_env(launch, token, cleanup):
     path = reverse("trovi_launcher:events", args=[launch.id])
-    params = (
-        launch.arguments
-        | {"id": str(launch.id), "site": launch.site, "project": launch.project}
-        | extra_params
-    )
-    return {
+    params = launch.arguments | {
+        "id": str(launch.id),
+        "site": launch.site,
+        "project": launch.project,
+    }
+    env = {
         "CALLBACK_URL": urljoin(settings.TROVI_LAUNCHER["CALLBACK_BASE_URL"], path),
         "CALLBACK_TOKEN": token,
         "LAUNCH_PARAMS": json.dumps(params),
     }
+    if cleanup:
+        env["LAUNCH_CLEANUP"] = json.dumps(cleanup)
+    return env
 
 
 def cancel_launch(launch):

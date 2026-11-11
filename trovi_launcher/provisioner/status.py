@@ -5,9 +5,9 @@ TROVI_LAUNCHER setting). Any command that follows this contract can be one:
 
 - LAUNCH_PARAMS is the launch as JSON: id, site and project, plus the
   launch's arguments. The arguments come from the artifact's defaults and the
-  user's changes to them, and mean whatever the provisioner makes of them. If
-  it has "cleanup", a list of [kind, id], delete those resources instead of
-  launching.
+  user's changes to them, and mean whatever the provisioner makes of them.
+- LAUNCH_CLEANUP, if set, is a JSON list of [kind, id]: delete those
+  resources instead of launching.
 - OS_* are OpenStack credentials scoped to the launch's project.
 - POST each event as JSON to CALLBACK_URL, with CALLBACK_TOKEN as a bearer
   token. An event has a status (running, then ready, failed, cancelled or
@@ -80,9 +80,7 @@ class Launch:
     def __init__(self, params: dict[str, Any], delete: Delete) -> None:
         self.params = params
         self.step = ""
-        self.created: list[tuple[str, str]] = [
-            tuple(resource) for resource in params.get("cleanup", [])
-        ]
+        self.created: list[tuple[str, str]] = []
         self._delete = delete
 
     def enter(self, step: str, message: str) -> None:
@@ -159,7 +157,8 @@ def run(provision: Provision, delete: Delete) -> int:
     """
     signal.signal(signal.SIGTERM, _cancel)
     launch = Launch(json.loads(os.environ["LAUNCH_PARAMS"]), delete)
-    if "cleanup" in launch.params:
+    if cleanup := os.environ.get("LAUNCH_CLEANUP"):
+        launch.created = [tuple(resource) for resource in json.loads(cleanup)]
         return _clean_up(launch)
     try:
         result = provision(launch)
@@ -180,7 +179,7 @@ def run(provision: Provision, delete: Delete) -> int:
 
 
 def _clean_up(launch: Launch) -> int:
-    """Delete the resources listed in the launch's cleanup parameter."""
+    """Delete the resources listed in LAUNCH_CLEANUP."""
     launch.enter("cleanup", "Deleting the launch's resources")
     launch.delete_created()
     if launch.created:

@@ -59,11 +59,12 @@ class ServiceTests(TestCase):
         )
 
     def test_arguments_cannot_replace_launch_fields(self):
-        self.create(arguments={"id": "other", "project": "other"})
+        self.create(arguments={"id": "other", "project": "other", "cleanup": "x"})
 
         params = json.loads(self.env()["LAUNCH_PARAMS"])
         self.assertNotEqual(params["id"], "other")
         self.assertEqual(params["project"], "CHI-000000")
+        self.assertNotIn("LAUNCH_CLEANUP", self.env())
 
     def test_credential_failure_creates_nothing(self):
         with mock.patch(
@@ -141,8 +142,8 @@ class ServiceTests(TestCase):
         service.clean_up_launch(launch)
 
         self.assertEqual(launch.status, Launch.Status.RUNNING)
-        params = json.loads(self.env()["LAUNCH_PARAMS"])
-        self.assertEqual(params["cleanup"], [["lease", "l"], ["server", "s"]])
+        cleanup = json.loads(self.env()["LAUNCH_CLEANUP"])
+        self.assertEqual(cleanup, [["lease", "l"], ["server", "s"]])
         service.record_event(
             launch,
             self.env()["CALLBACK_TOKEN"],

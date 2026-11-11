@@ -41,7 +41,7 @@ class LocalRunnerTests(LiveServerTestCase):
         self.wait_for(launch, Launch.Status.READY)
 
         self.assertEqual(launch.result["floating_ip"], "192.0.2.10")
-        self.assertEqual(launch.events.last().message, "ssh cc@192.0.2.10")
+        self.assertEqual(launch.message, "ssh cc@192.0.2.10")
 
     def test_failure(self):
         launch = self.launch(FAKE_PROVISIONER_FAIL_AT="server")

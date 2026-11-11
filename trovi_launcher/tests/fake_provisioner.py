@@ -28,6 +28,7 @@ def provision(launch):
         if step == "server":
             launch.track("server", server_id)
     end = datetime.now(timezone.utc) + timedelta(hours=1)
+    launch.report(message=f"ssh cc@{IP}")
     return {
         "floating_ip": IP,
         "server_id": server_id,

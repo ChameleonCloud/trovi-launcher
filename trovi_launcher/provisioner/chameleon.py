@@ -50,8 +50,7 @@ def provision(launch: status.Launch) -> dict[str, str]:
     Returns:
         The launch's result, which the launcher stores and shows to the user:
 
-        - floating_ip: the node's public address. status.run also turns it
-          into the "ssh cc@<floating_ip>" ready message.
+        - floating_ip: the node's public address.
         - server_id: the Nova server ID.
         - lease_id: the lease the node runs on.
         - lease_end: when that lease ends, as an ISO 8601 UTC time.
@@ -89,6 +88,7 @@ def provision(launch: status.Launch) -> dict[str, str]:
     launch.enter("finalize", "Granting access to your SSH key")
     user_key = shlex.quote(params["ssh_public_key"])
     ssh(server, key, f"echo {user_key} > ~/.ssh/authorized_keys")
+    launch.report(message=f"ssh cc@{ip}")
     return {
         "floating_ip": ip,
         "server_id": server.id,

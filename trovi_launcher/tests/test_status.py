@@ -58,7 +58,6 @@ class RunTests(TestCase):
             {
                 "step": "finalize",
                 "status": "ready",
-                "message": "ssh cc@192.0.2.10",
                 "result": {"floating_ip": "192.0.2.10"},
             },
         )

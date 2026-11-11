@@ -143,10 +143,9 @@ def run(provision: Provision, delete: Delete) -> int:
     """Run the provisioner process: provision a launch, or clean one up.
 
     provision(launch) creates the resources, tracking each with launch.track,
-    and returns the launch's result. The result must include floating_ip,
-    which becomes the "ssh cc@<floating_ip>" ready message. If provision
-    raises, or the launch is cancelled, everything tracked is deleted and the
-    launch is reported failed or cancelled.
+    and returns the launch's result. If provision raises, or the launch is
+    cancelled, everything tracked is deleted and the launch is reported
+    failed or cancelled.
 
     delete(kind, resource_id) deletes one tracked resource. It must work from
     the ID alone, because a clean up runs in a later process.
@@ -172,9 +171,7 @@ def run(provision: Provision, delete: Delete) -> int:
             status="failed", level="error", message=f"{type(e).__name__}: {e}"
         )
         return 1
-    launch.report(
-        status="ready", message=f"ssh cc@{result['floating_ip']}", result=result
-    )
+    launch.report(status="ready", result=result)
     return 0
 
 

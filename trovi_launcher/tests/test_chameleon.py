@@ -122,6 +122,9 @@ class ChameleonTests(TestCase):
                 f"echo '{KEY}' > ~/.ssh/authorized_keys",
             ],
         )
+        self.assertEqual(
+            self.events[-1], {"step": "finalize", "message": "ssh cc@192.0.2.2"}
+        )
 
     def test_uses_user_lease(self):
         self.mocks["get_lease"].return_value = lease()

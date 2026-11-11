@@ -1,3 +1,4 @@
+import base64
 import importlib.util
 from datetime import datetime, timedelta, timezone
 from unittest import TestCase, mock, skipUnless
@@ -62,7 +63,6 @@ class ChameleonTests(TestCase):
                 ],
             ),
             "nova": mock.patch("chi.clients.nova"),
-            "generate": mock.patch("paramiko.RSAKey.generate"),
             "post_event": mock.patch.object(status, "post_event", self.events.append),
         }
         self.mocks = {}
@@ -72,9 +72,6 @@ class ChameleonTests(TestCase):
         self.server = self.mocks["server"].return_value
         self.server.id = "server"
         self.server.status = "ACTIVE"
-        self.connection = self.server.ssh_connection.return_value.__enter__.return_value
-        self.mocks["generate"].return_value.get_name.return_value = "ssh-rsa"
-        self.mocks["generate"].return_value.get_base64.return_value = "AAAA"
 
     def provision(self, **overrides):
         self.launch = status.Launch(params(**overrides), chameleon.delete)
@@ -100,7 +97,7 @@ class ChameleonTests(TestCase):
             amount=1, node_type="compute_skylake"
         )
         new_lease.add_fip_reservation.assert_called_once_with(amount=1)
-        self.mocks["keypair"].assert_called_once_with("trovi-abc", "ssh-rsa AAAA")
+        self.mocks["keypair"].assert_called_once_with("trovi-abc", KEY)
         self.mocks["server"].assert_called_once_with(
             "trovi-abc",
             reservation_id="node-res",
@@ -114,16 +111,14 @@ class ChameleonTests(TestCase):
         self.assertEqual(
             self.launch.created, [("lease", "lease"), ("server", "server")]
         )
+        user_data = self.server.submit.call_args.kwargs["user_data"]
         self.assertEqual(
-            [call.args[0] for call in self.connection.run.call_args_list],
-            [
-                "git clone -- https://github.com/org/repo.git repo"
-                " && git -C repo checkout abc123",
-                f"echo '{KEY}' > ~/.ssh/authorized_keys",
-            ],
+            base64.b64decode(user_data).decode(),
+            "#!/bin/sh\nsu - cc -c 'git clone -- https://github.com/org/repo.git"
+            " repo && git -C repo checkout abc123'\n",
         )
         self.assertEqual(
-            self.events[-1], {"step": "finalize", "message": "ssh cc@192.0.2.2"}
+            self.events[-1], {"step": "access", "message": "ssh cc@192.0.2.2"}
         )
 
     def test_uses_user_lease(self):
@@ -159,8 +154,7 @@ class ChameleonTests(TestCase):
     def test_skips_contents_without_a_repository(self):
         self.provision(contents_remote="")
 
-        self.assertEqual(self.connection.run.call_count, 1)
-        self.assertNotIn("contents", [event["step"] for event in self.events])
+        self.assertNotIn("user_data", self.server.submit.call_args.kwargs)
 
     def test_rejects_lease_in_error(self):
         self.mocks["lease"].return_value = lease("ERROR")
@@ -175,19 +169,6 @@ class ChameleonTests(TestCase):
         nova.servers.get.return_value.fault = {"message": "No valid host"}
         with self.assertRaisesRegex(RuntimeError, "ERROR: No valid host"):
             self.provision()
-
-    def test_contents_failure_is_a_warning(self):
-        self.connection.run.side_effect = [RuntimeError("clone failed"), None]
-        self.provision()
-
-        self.assertIn(
-            {
-                "step": "contents",
-                "level": "warning",
-                "message": "Could not load contents: clone failed",
-            },
-            self.events,
-        )
 
     def test_deletes_by_kind(self):
         chameleon.delete("lease", "l")

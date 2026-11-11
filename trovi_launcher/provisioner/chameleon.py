@@ -9,9 +9,12 @@ It understands these arguments, and ignores any others:
 - lease_id: launch on this existing lease. Without it, node_type and
   lease_duration_hours are required, and a new lease is made.
 - image: the disk image, by default python-chi's default image.
-- contents_remote and contents_ref: a git repository to clone onto the node.
+- contents_remote and contents_ref: a git repository that cloud-init clones
+  into cc's home directory at boot. The launch doesn't wait for the clone or
+  report its failure; /var/log/cloud-init-output.log on the node has why.
 """
 
+import base64
 import shlex
 import sys
 from collections.abc import Callable
@@ -22,7 +25,6 @@ import chi.clients
 import chi.lease
 import chi.network
 import chi.server
-import paramiko
 
 from . import status
 
@@ -58,9 +60,8 @@ def provision(launch: status.Launch) -> dict[str, str]:
     launch.enter("lease", "Reserving a node")
     lease = reserve(launch, name)
 
-    launch.enter("keypair", "Creating a temporary keypair")
-    key = paramiko.RSAKey.generate(3072)
-    chi.server.update_keypair(name, f"{key.get_name()} {key.get_base64()}")
+    launch.enter("keypair", "Adding your SSH key")
+    chi.server.update_keypair(name, params["ssh_public_key"])
     launch.track("keypair", name)
 
     launch.enter("server", "Launching the server")
@@ -72,17 +73,6 @@ def provision(launch: status.Launch) -> dict[str, str]:
 
     launch.enter("access", f"Waiting for SSH on {ip}")
     server.check_connectivity(host=ip, timeout=SSH_TIMEOUT, show=None)
-
-    if params.get("contents_remote"):
-        launch.enter("contents", "Loading the artifact contents")
-        try:
-            ssh(server, key, clone_command(params))
-        except Exception as e:
-            launch.report(level="warning", message=f"Could not load contents: {e}")
-
-    launch.enter("finalize", "Granting access to your SSH key")
-    user_key = shlex.quote(params["ssh_public_key"])
-    ssh(server, key, f"echo {user_key} > ~/.ssh/authorized_keys")
     launch.report(message=f"ssh cc@{ip}")
     return {
         "floating_ip": ip,
@@ -139,9 +129,10 @@ def create_server(
 ) -> chi.server.Server:
     """Launch the node on the lease's node reservation and wait until it's up.
 
-    The server is named name and uses the temporary keypair of the same name.
-    It is tracked as soon as it has an ID. If it ends in ERROR, this raises
-    with Nova's fault message, such as "No valid host was found".
+    The server is named name and uses the keypair of the same name, which
+    holds the user's key. With contents_remote, it clones that at boot. It is
+    tracked as soon as it has an ID. If it ends in ERROR, this raises with
+    Nova's fault message, such as "No valid host was found".
     """
     server = chi.server.Server(
         name,
@@ -149,7 +140,10 @@ def create_server(
         image_name=launch.params.get("image") or chi.server.DEFAULT_IMAGE,
         key_name=name,
     )
-    server.submit(wait_for_active=False, show=None)
+    options = {}
+    if launch.params.get("contents_remote"):
+        options["user_data"] = user_data(launch.params)
+    server.submit(wait_for_active=False, show=None, **options)
     server.refresh()
     launch.track("server", server.id)
     server.wait(show=None, timeout=SERVER_TIMEOUT)
@@ -178,15 +172,14 @@ def attach_floating_ip(server: chi.server.Server, lease: chi.lease.Lease) -> str
     return free[0]
 
 
-def ssh(server: chi.server.Server, key: paramiko.PKey, command: str) -> None:
-    """Run a shell command on the node as cc, logging in with key.
+def user_data(params: dict[str, Any]) -> str:
+    """Return a boot script that runs clone_command as cc, encoded for Nova.
 
-    Raises if the command exits non-zero. The error includes the end of its
-    output, which is why the output is hidden rather than printed.
+    cloud-init runs it as root on the node's first boot. Nova takes user data
+    base64-encoded, and openstacksdk's compute proxy doesn't encode it.
     """
-    connect_kwargs = {"pkey": key, "allow_agent": False, "look_for_keys": False}
-    with server.ssh_connection(connect_kwargs=connect_kwargs) as connection:
-        connection.run(command, hide=True)
+    script = f"#!/bin/sh\nsu - cc -c {shlex.quote(clone_command(params))}\n"
+    return base64.b64encode(script.encode()).decode()
 
 
 def clone_command(params: dict[str, Any]) -> str:

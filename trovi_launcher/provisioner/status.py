@@ -13,7 +13,7 @@ TROVI_LAUNCHER setting). Any command that follows this contract can be one:
   token. An event has a status (running, then ready, failed, cancelled or
   deleted) and optionally a step, level, message, result (anything the user
   should see, such as an IP address) and data, which records each resource
-  as {"created": {kind: id}} or {"deleted": {kind: id}}.
+  as {"created": [kind, id]} or {"deleted": [kind, id]}.
 - SIGTERM cancels the launch. Exiting without a final status fails it.
 
 A Python provisioner can call run() with its own provision and delete
@@ -102,7 +102,7 @@ class Launch:
         self.created.append((kind, resource_id))
         self.report(
             message=f"Created {kind} {resource_id}",
-            data={"created": {kind: resource_id}},
+            data={"created": [kind, resource_id]},
         )
         return resource_id
 
@@ -112,7 +112,7 @@ class Launch:
         self.created.remove((kind, resource_id))
         self.report(
             message=f"Deleted {kind} {resource_id}",
-            data={"deleted": {kind: resource_id}},
+            data={"deleted": [kind, resource_id]},
         )
 
     def delete_created(self) -> None:

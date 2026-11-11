@@ -41,9 +41,7 @@ class RunTests(TestCase):
 
     def ledger(self, action):
         return [
-            next(iter(e["data"][action]))
-            for e in self.events
-            if action in e.get("data", {})
+            e["data"][action][0] for e in self.events if action in e.get("data", {})
         ]
 
     def test_ready(self):

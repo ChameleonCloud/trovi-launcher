@@ -55,10 +55,10 @@ class Launch(models.Model):
         """Return [kind, id] for what this launch created and hasn't deleted."""
         resources = {}
         for event in self.events.all():
-            for resource in event.data.get("created", {}).items():
-                resources[resource] = True
-            for resource in event.data.get("deleted", {}).items():
-                resources.pop(resource, None)
+            if created := event.data.get("created"):
+                resources[tuple(created)] = True
+            if deleted := event.data.get("deleted"):
+                resources.pop(tuple(deleted), None)
         return [list(resource) for resource in resources]
 
 

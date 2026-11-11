@@ -129,10 +129,10 @@ class ServiceTests(TestCase):
         launch = self.create()
         token = self.env()["CALLBACK_TOKEN"]
         for event in [
-            {"data": {"created": {"lease": "l"}}},
-            {"data": {"created": {"keypair": "k"}}},
-            {"data": {"created": {"server": "s"}}},
-            {"data": {"deleted": {"keypair": "k"}}},
+            {"data": {"created": ["lease", "l"]}},
+            {"data": {"created": ["keypair", "k"]}},
+            {"data": {"created": ["server", "s"]}},
+            {"data": {"deleted": ["keypair", "k"]}},
             {"status": "ready"},
         ]:
             service.record_event(launch, token, event)
@@ -144,17 +144,17 @@ class ServiceTests(TestCase):
         service.record_event(
             launch,
             self.env()["CALLBACK_TOKEN"],
-            {"status": "deleted", "data": {"deleted": {"server": "s"}}},
+            {"status": "deleted", "data": {"deleted": ["server", "s"]}},
         )
         self.assertEqual(launch.resources(), [["lease", "l"]])
 
     def test_clean_up_skips_active_and_empty_launches(self):
         launch = self.create()
         token = self.env()["CALLBACK_TOKEN"]
-        service.record_event(launch, token, {"data": {"created": {"lease": "l"}}})
+        service.record_event(launch, token, {"data": {"created": ["lease", "l"]}})
         service.clean_up_launch(launch)
         service.record_event(
-            launch, token, {"status": "ready", "data": {"deleted": {"lease": "l"}}}
+            launch, token, {"status": "ready", "data": {"deleted": ["lease", "l"]}}
         )
         service.clean_up_launch(launch)
 
@@ -182,13 +182,13 @@ class ServiceTests(TestCase):
     def test_launch_stopped_at_deadline_reports_its_clean_up(self):
         launch = self.create()
         token = self.env()["CALLBACK_TOKEN"]
-        service.record_event(launch, token, {"data": {"created": {"lease": "l"}}})
+        service.record_event(launch, token, {"data": {"created": ["lease", "l"]}})
         Launch.objects.filter(pk=launch.pk).update(
             updated_at=timezone.now() - timedelta(hours=2)
         )
         launch.refresh_from_db()
         service.reconcile(launch)
-        service.record_event(launch, token, {"data": {"deleted": {"lease": "l"}}})
+        service.record_event(launch, token, {"data": {"deleted": ["lease", "l"]}})
         service.record_event(launch, token, {"status": "cancelled"})
 
         self.assertEqual(launch.status, Launch.Status.CANCELLED)

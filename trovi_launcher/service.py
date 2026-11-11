@@ -21,7 +21,7 @@ def _hash(token):
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def create_launch(subject_token=None, **fields):
+def create_launch(subject_token, **fields):
     """Start a launch from Launch fields: site, project, arguments and who asked."""
     launch = Launch(**fields, runner=settings.TROVI_LAUNCHER.get("RUNNER", "local"))
     launch.full_clean()
@@ -29,7 +29,7 @@ def create_launch(subject_token=None, **fields):
     return launch
 
 
-def clean_up_launch(launch, subject_token=None):
+def clean_up_launch(launch, subject_token):
     """Delete what a finished launch created, such as its server and lease."""
     resources = launch.resources()
     if launch.is_active or not resources:

@@ -26,7 +26,7 @@ class LocalRunnerTests(LiveServerTestCase):
         environ = mock.patch.dict(os.environ, {"FAKE_PROVISIONER_DELAY": "0"} | env)
         credentials = mock.patch("trovi_launcher.credentials.resolve", return_value={})
         with settings, environ, credentials:
-            return service.create_launch(**FIELDS)
+            return service.create_launch(subject_token="token", **FIELDS)
 
     def wait_for(self, launch, status):
         for _ in range(100):

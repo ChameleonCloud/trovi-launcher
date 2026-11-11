@@ -16,7 +16,7 @@ class EventViewTests(TestCase):
             mock.patch("trovi_launcher.runners.get", return_value=runner),
             mock.patch("trovi_launcher.credentials.resolve", return_value={}),
         ):
-            self.launch = service.create_launch(**FIELDS)
+            self.launch = service.create_launch(subject_token="token", **FIELDS)
         self.token = runner.start.call_args.args[1]["CALLBACK_TOKEN"]
         self.url = reverse("trovi_launcher:events", args=[self.launch.id])
         self.client = Client(enforce_csrf_checks=True)

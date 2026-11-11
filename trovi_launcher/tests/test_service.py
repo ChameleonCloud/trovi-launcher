@@ -32,7 +32,7 @@ class ServiceTests(TestCase):
             self.addCleanup(patcher.stop)
 
     def create(self, **overrides):
-        return service.create_launch(**FIELDS | overrides)
+        return service.create_launch(subject_token="token", **FIELDS | overrides)
 
     def env(self):
         return self.runner.start.call_args.args[1]
@@ -136,7 +136,7 @@ class ServiceTests(TestCase):
             {"status": "ready"},
         ]:
             service.record_event(launch, token, event)
-        service.clean_up_launch(launch)
+        service.clean_up_launch(launch, subject_token="token")
 
         self.assertEqual(launch.status, Launch.Status.RUNNING)
         cleanup = json.loads(self.env()["LAUNCH_CLEANUP"])
@@ -152,11 +152,11 @@ class ServiceTests(TestCase):
         launch = self.create()
         token = self.env()["CALLBACK_TOKEN"]
         service.record_event(launch, token, {"data": {"created": ["lease", "l"]}})
-        service.clean_up_launch(launch)
+        service.clean_up_launch(launch, subject_token="token")
         service.record_event(
             launch, token, {"status": "ready", "data": {"deleted": ["lease", "l"]}}
         )
-        service.clean_up_launch(launch)
+        service.clean_up_launch(launch, subject_token="token")
 
         self.runner.start.assert_called_once()
 

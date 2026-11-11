@@ -16,8 +16,12 @@ TROVI_LAUNCHER setting). Any command that follows this contract can be one:
   as {"created": [kind, id]} or {"deleted": [kind, id]}.
 - SIGTERM cancels the launch. Exiting without a final status fails it.
 
-A Python provisioner can call run() with its own provision and delete
-functions, and leave the rest of the contract to this module.
+A Python provisioner can call run(provision, delete) and leave the rest of
+the contract to this module. provision(launch) calls launch.track for each
+resource as soon as it exists, and returns the launch's result. If it
+raises or the launch is cancelled, everything tracked is deleted. Whatever
+is still tracked once the launch is ready is deleted by a later clean up,
+in another process, so delete(kind, id) must work from the ID alone.
 """
 
 import json
@@ -68,8 +72,7 @@ def post_event(event: dict[str, Any]) -> None:
 class Launch:
     """The launch being provisioned, and the resources created for it.
 
-    params is LAUNCH_PARAMS: id, site and project, plus the launch's
-    arguments. step is the step being worked on, which every report carries.
+    params is LAUNCH_PARAMS, step is the step every report carries, and
     created lists the (kind, id) of each resource that exists, oldest first.
     """
 
@@ -87,18 +90,12 @@ class Launch:
     def report(self, **event: Any) -> None:
         """Send an event for the current step.
 
-        event can set status, level, message, result and data, as the module
-        docstring describes. Without a status, the launch is still running.
+        Without a status, the launch is still running.
         """
         post_event({"step": self.step} | event)
 
     def track(self, kind: str, resource_id: str) -> None:
-        """Record that a resource now exists.
-
-        Call this as soon as a resource is created. Everything tracked is
-        deleted if the launch fails or is cancelled, and whatever is left when
-        it finishes is what the user's clean up deletes.
-        """
+        """Record that a resource now exists."""
         self.created.append((kind, resource_id))
         self.report(
             message=f"Created {kind} {resource_id}",
@@ -135,15 +132,7 @@ Provision = Callable[[Launch], dict[str, Any]]
 
 
 def run(provision: Provision, delete: Delete) -> int:
-    """Run the provisioner process: provision a launch, or clean one up.
-
-    provision(launch) creates the resources, tracking each with launch.track,
-    and returns the launch's result. If provision raises, or the launch is
-    cancelled, everything tracked is deleted and the launch is reported
-    failed or cancelled.
-
-    delete(kind, resource_id) deletes one tracked resource. It must work from
-    the ID alone, because a clean up runs in a later process.
+    """Provision the launch, or clean it up if LAUNCH_CLEANUP is set.
 
     Returns:
         The process's exit status: 0 if the launch is ready or cleaned up,

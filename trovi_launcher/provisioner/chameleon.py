@@ -42,11 +42,6 @@ DELETE: dict[str, Callable[[str], object]] = {
 def provision(launch: status.Launch) -> dict[str, str]:
     """Bring up one node for the launch and give the user SSH access to it.
 
-    status.run calls this with the launch's arguments in launch.params. Each
-    step is announced with launch.enter, and each resource is recorded with
-    launch.track as soon as it exists, so a failure, a cancel or a later
-    clean up can remove it through delete. Raising fails the launch.
-
     Returns:
         The launch's result, which the launcher stores and shows to the user:
 
@@ -98,13 +93,7 @@ def provision(launch: status.Launch) -> dict[str, str]:
 
 
 def delete(kind: str, resource_id: str) -> None:
-    """Delete one resource that provision tracked.
-
-    kind is a key of DELETE and resource_id is what provision passed to
-    launch.track. status.run calls this when a launch fails or is cancelled,
-    and for each leftover resource when the user cleans up a finished launch.
-    That can be in a later process, so it works from the ID alone.
-    """
+    """Delete one resource that provision tracked."""
     DELETE[kind](resource_id)
 
 

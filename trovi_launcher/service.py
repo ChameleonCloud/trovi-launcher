@@ -105,7 +105,6 @@ def record_event(launch, token, event):
     if not launch.is_active:
         launch.finished_at = timezone.now()
         launch.callback_token_hash = ""
-    launch.full_clean()
     launch.save(
         update_fields=[
             "status",

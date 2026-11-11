@@ -92,8 +92,8 @@ class Launch:
         """
         post_event({"step": self.step} | event)
 
-    def track(self, kind: str, resource_id: str) -> str:
-        """Record that a resource now exists, and return its ID.
+    def track(self, kind: str, resource_id: str) -> None:
+        """Record that a resource now exists.
 
         Call this as soon as a resource is created. Everything tracked is
         deleted if the launch fails or is cancelled, and whatever is left when
@@ -104,7 +104,6 @@ class Launch:
             message=f"Created {kind} {resource_id}",
             data={"created": [kind, resource_id]},
         )
-        return resource_id
 
     def delete(self, kind: str, resource_id: str) -> None:
         """Delete a tracked resource now, such as a temporary keypair."""

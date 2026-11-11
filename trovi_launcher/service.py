@@ -136,7 +136,6 @@ def _finish(launch, status, message):
             message=message,
             finished_at=now,
             updated_at=now,
-            callback_token_hash="",
         )
         if updated:
             launch.events.create(level=LaunchEvent.Level.ERROR, message=message)

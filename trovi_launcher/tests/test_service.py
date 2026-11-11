@@ -181,6 +181,21 @@ class ServiceTests(TestCase):
         self.runner.stop.assert_called_once()
         self.assertEqual(launch.status, Launch.Status.FAILED)
 
+    def test_launch_stopped_at_deadline_reports_its_clean_up(self):
+        launch = self.create()
+        token = self.env()["CALLBACK_TOKEN"]
+        service.record_event(launch, token, {"data": {"created": {"lease": "l"}}})
+        Launch.objects.filter(pk=launch.pk).update(
+            updated_at=timezone.now() - timedelta(hours=2)
+        )
+        launch.refresh_from_db()
+        service.reconcile(launch)
+        service.record_event(launch, token, {"data": {"deleted": {"lease": "l"}}})
+        service.record_event(launch, token, {"status": "cancelled"})
+
+        self.assertEqual(launch.status, Launch.Status.CANCELLED)
+        self.assertEqual(launch.resources(), [])
+
     def test_reconcile_leaves_running_launch(self):
         launch = self.create()
         service.reconcile(launch)

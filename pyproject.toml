@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trovi-launcher"
+version = "0.1.0"
+description = "Launch Trovi artifacts onto a single Chameleon node"
+requires-python = ">=3.12"
+dependencies = ["Django>=5.2", "keystoneauth1", "requests"]
+
+[project.optional-dependencies]
+chi = ["python-chi>=1.2"]
+dev = ["black", "flake8", "flake8-bugbear"]
+
+[tool.setuptools.packages.find]
+include = ["trovi_launcher*"]
+
+[tool.black]
+line-length = 88
+extend-exclude = "migrations"

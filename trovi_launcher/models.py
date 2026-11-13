@@ -20,6 +20,7 @@ class Launch(models.Model):
     email = models.EmailField(blank=True)
 
     artifact_uuid = models.UUIDField(null=True, blank=True)
+    artifact_title = models.CharField(max_length=255, blank=True)
     version_slug = models.CharField(max_length=255, blank=True)
 
     site = models.CharField(max_length=64)

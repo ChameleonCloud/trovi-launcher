@@ -18,6 +18,7 @@ class LaunchEventInline(admin.TabularInline):
 class LaunchAdmin(admin.ModelAdmin):
     list_display = [
         "id",
+        "artifact_title",
         "status",
         "step",
         "site",
@@ -25,7 +26,7 @@ class LaunchAdmin(admin.ModelAdmin):
         "created_at",
     ]
     list_filter = ["status", "site", "runner", "created_at"]
-    search_fields = ["user_sub", "username", "email"]
+    search_fields = ["user_sub", "username", "email", "artifact_title"]
     exclude = ["callback_token_hash"]
     inlines = [LaunchEventInline]
     actions = ["cancel", "reconcile"]

@@ -1,5 +1,8 @@
+from urllib.parse import urlparse
+
 import requests
 from django.conf import settings
+from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
 from keystoneauth1 import exceptions as keystone_exceptions
 from keystoneauth1 import session
@@ -12,10 +15,46 @@ IDENTITY_PROVIDER = "chameleon"
 PROTOCOL = "openid"
 PROJECT_DOMAIN = "chameleon"
 
+SITES_URL = "https://api.chameleoncloud.org/sites.json"
+DEV_KEYCLOAK = "auth.dev.chameleoncloud.org"
+# The sites dev Keycloak authenticates for, which the sites API doesn't list
+DEV_SITES = [
+    {"name": "CHI_DEV_UC", "uid": "uc", "web": "https://dev.uc.chameleoncloud.org"},
+    {"name": "CHI_DEV", "uid": "tacc", "web": "https://dev.tacc.chameleoncloud.org"},
+]
+# Keystones whose Keycloak client isn't named keystone-<uid>-<prod|dev>
+AUDIENCES = {"ncar": "keystone-ncar", "nrp": "keystone-nrp", "nu": "keystone-nu"}
+
+
+def sites():
+    """Return the sites users can launch on, by region name."""
+    return cache.get_or_set("trovi_launcher:sites", _fetch_sites, 60 * 60)
+
+
+def _fetch_sites():
+    if urlparse(settings.OIDC_OP_TOKEN_ENDPOINT).hostname == DEV_KEYCLOAK:
+        env, items = "dev", DEV_SITES
+    else:
+        response = requests.get(SITES_URL, timeout=10)
+        response.raise_for_status()
+        # Only bare metal sites take the node reservations launches make
+        env, items = "prod", [
+            site
+            for site in response.json()["items"]
+            if site["site_class"] == "baremetal"
+        ]
+    return {
+        site["name"]: {
+            "auth_url": f"{site['web']}:5000/v3",
+            "audience": AUDIENCES.get(site["uid"], f"keystone-{site['uid']}-{env}"),
+        }
+        for site in items
+    }
+
 
 def resolve(launch, subject_token):
     """Return the OS_* environment the provisioner authenticates with."""
-    site = settings.TROVI_LAUNCHER["SITES"].get(launch.site)
+    site = sites().get(launch.site)
     if not site:
         raise ValidationError({"site": f"Unknown site {launch.site}."})
     auth = v3.OidcAccessToken(

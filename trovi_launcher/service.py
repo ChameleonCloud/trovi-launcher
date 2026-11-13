@@ -21,15 +21,18 @@ def _hash(token):
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def create_launch(subject_token, **fields):
-    """Start a launch from Launch fields: site, project, arguments and who asked."""
+def create_launch(subject_token, callback_base_url, **fields):
+    """Start a launch from Launch fields: site, project, arguments and who asked.
+
+    The provisioner reports to callback_base_url, the site root as it reaches it.
+    """
     launch = Launch(**fields, runner=settings.TROVI_LAUNCHER.get("RUNNER", "local"))
     launch.full_clean()
-    _start(launch, credentials.resolve(launch, subject_token))
+    _start(launch, credentials.resolve(launch, subject_token), callback_base_url)
     return launch
 
 
-def clean_up_launch(launch, subject_token):
+def clean_up_launch(launch, subject_token, callback_base_url):
     """Delete what a finished launch created, such as its server and lease."""
     resources = launch.resources()
     if launch.is_active or not resources:
@@ -37,17 +40,17 @@ def clean_up_launch(launch, subject_token):
     env = credentials.resolve(launch, subject_token)
     launch.status, launch.step = Launch.Status.RUNNING, "cleanup"
     launch.finished_at = None
-    _start(launch, env, cleanup=resources)
+    _start(launch, env, callback_base_url, cleanup=resources)
 
 
-def _start(launch, env, cleanup=None):
+def _start(launch, env, callback_base_url, cleanup=None):
     runner = runners.get(launch.runner)
     token = secrets.token_urlsafe(32)
     launch.callback_token_hash = _hash(token)
     launch.save()
     try:
         launch.runner_ref = runner.start(
-            launch, env | _provisioner_env(launch, token, cleanup)
+            launch, env | _provisioner_env(launch, token, callback_base_url, cleanup)
         )
     except Exception as e:
         _finish(launch, Launch.Status.FAILED, f"Runner failed to start: {e}")
@@ -55,7 +58,7 @@ def _start(launch, env, cleanup=None):
     launch.save(update_fields=["runner_ref", "updated_at"])
 
 
-def _provisioner_env(launch, token, cleanup):
+def _provisioner_env(launch, token, callback_base_url, cleanup):
     path = reverse("trovi_launcher:events", args=[launch.id])
     params = launch.arguments | {
         "id": str(launch.id),
@@ -63,7 +66,7 @@ def _provisioner_env(launch, token, cleanup):
         "project": launch.project,
     }
     env = {
-        "CALLBACK_URL": urljoin(settings.TROVI_LAUNCHER["CALLBACK_BASE_URL"], path),
+        "CALLBACK_URL": urljoin(callback_base_url, path),
         "CALLBACK_TOKEN": token,
         "LAUNCH_PARAMS": json.dumps(params),
     }

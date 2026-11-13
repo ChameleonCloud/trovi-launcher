@@ -17,16 +17,16 @@ FAKE_PROVISIONER = "trovi_launcher.tests.fake_provisioner"
 class LocalRunnerTests(LiveServerTestCase):
     def launch(self, **env):
         settings = self.settings(
-            TROVI_LAUNCHER={
-                "SITES": {},
-                "CALLBACK_BASE_URL": self.live_server_url,
-                "PROVISIONER": [sys.executable, "-m", FAKE_PROVISIONER],
-            }
+            TROVI_LAUNCHER={"PROVISIONER": [sys.executable, "-m", FAKE_PROVISIONER]}
         )
         environ = mock.patch.dict(os.environ, {"FAKE_PROVISIONER_DELAY": "0"} | env)
         credentials = mock.patch("trovi_launcher.credentials.resolve", return_value={})
         with settings, environ, credentials:
-            return service.create_launch(subject_token="token", **FIELDS)
+            return service.create_launch(
+                subject_token="token",
+                callback_base_url=self.live_server_url,
+                **FIELDS,
+            )
 
     def wait_for(self, launch, status):
         for _ in range(100):

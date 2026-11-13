@@ -16,6 +16,7 @@ FIELDS = {
     "arguments": {"node_type": "compute_skylake", "lease_duration_hours": 2},
     "user_sub": "sub",
 }
+CALLBACK = "http://launcher.test"
 
 
 class ServiceTests(TestCase):
@@ -32,7 +33,9 @@ class ServiceTests(TestCase):
             self.addCleanup(patcher.stop)
 
     def create(self, **overrides):
-        return service.create_launch(subject_token="token", **FIELDS | overrides)
+        return service.create_launch(
+            subject_token="token", callback_base_url=CALLBACK, **FIELDS | overrides
+        )
 
     def env(self):
         return self.runner.start.call_args.args[1]
@@ -42,7 +45,7 @@ class ServiceTests(TestCase):
 
         self.assertEqual(launch.runner_ref, "1234")
         path = reverse("trovi_launcher:events", args=[launch.id])
-        self.assertEqual(self.env()["CALLBACK_URL"], f"http://launcher.test{path}")
+        self.assertEqual(self.env()["CALLBACK_URL"], f"{CALLBACK}{path}")
         self.assertEqual(self.env()["OS_TOKEN"], "keystone-token")
         self.assertEqual(
             json.loads(self.env()["LAUNCH_PARAMS"]),
@@ -136,7 +139,9 @@ class ServiceTests(TestCase):
             {"status": "ready"},
         ]:
             service.record_event(launch, token, event)
-        service.clean_up_launch(launch, subject_token="token")
+        service.clean_up_launch(
+            launch, subject_token="token", callback_base_url=CALLBACK
+        )
 
         self.assertEqual(launch.status, Launch.Status.RUNNING)
         cleanup = json.loads(self.env()["LAUNCH_CLEANUP"])
@@ -152,11 +157,15 @@ class ServiceTests(TestCase):
         launch = self.create()
         token = self.env()["CALLBACK_TOKEN"]
         service.record_event(launch, token, {"data": {"created": ["lease", "l"]}})
-        service.clean_up_launch(launch, subject_token="token")
+        service.clean_up_launch(
+            launch, subject_token="token", callback_base_url=CALLBACK
+        )
         service.record_event(
             launch, token, {"status": "ready", "data": {"deleted": ["lease", "l"]}}
         )
-        service.clean_up_launch(launch, subject_token="token")
+        service.clean_up_launch(
+            launch, subject_token="token", callback_base_url=CALLBACK
+        )
 
         self.runner.start.assert_called_once()
 

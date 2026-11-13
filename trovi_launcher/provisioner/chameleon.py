@@ -25,9 +25,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 import chi.clients
+import chi.exception
 import chi.lease
 import chi.network
 import chi.server
+import novaclient.exceptions
 
 from . import status
 
@@ -42,6 +44,9 @@ DELETE: dict[str, Callable[[str], object]] = {
     "keypair": lambda name: chi.clients.nova().keypairs.delete(name),
     "server": lambda server_id: chi.clients.nova().servers.delete(server_id),
 }
+# What deleting a resource that's already gone raises, such as a server deleted
+# with its lease. python-chi raises CHIValueError for a lease Blazar can't find.
+GONE = (chi.exception.CHIValueError, novaclient.exceptions.NotFound)
 # Runs on the node with the http access method as its argument. It's Python,
 # which cloud-init images always have, unlike curl or unzip, and sticks to what
 # Python 3.8 has for older images.
@@ -112,8 +117,11 @@ def provision(launch: status.Launch) -> dict[str, str]:
 
 
 def delete(kind: str, resource_id: str) -> None:
-    """Delete one resource that provision tracked."""
-    DELETE[kind](resource_id)
+    """Delete one resource that provision tracked, unless it's already gone."""
+    try:
+        DELETE[kind](resource_id)
+    except GONE:
+        pass
 
 
 def reserve(launch: status.Launch, name: str) -> chi.lease.Lease:

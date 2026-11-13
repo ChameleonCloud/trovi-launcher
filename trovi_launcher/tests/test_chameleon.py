@@ -12,6 +12,9 @@ from trovi_launcher.provisioner import status
 
 HAS_CHI = importlib.util.find_spec("chi") is not None
 if HAS_CHI:
+    import chi.exception
+    import novaclient.exceptions
+
     from trovi_launcher.provisioner import chameleon
 
 KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 user@host"
@@ -195,6 +198,18 @@ class ChameleonTests(TestCase):
         self.mocks["get_lease"].return_value.delete.assert_called_once_with()
         self.mocks["get_lease"].assert_called_once_with("l")
         self.mocks["nova"].return_value.servers.delete.assert_called_once_with("s")
+
+    def test_already_deleted_resources_count_as_deleted(self):
+        self.mocks["get_lease"].side_effect = chi.exception.CHIValueError("Not found")
+        nova = self.mocks["nova"].return_value
+        nova.servers.delete.side_effect = novaclient.exceptions.NotFound(404)
+
+        chameleon.delete("lease", "l")
+        chameleon.delete("server", "s")
+
+        nova.servers.delete.side_effect = novaclient.exceptions.Forbidden(403)
+        with self.assertRaises(novaclient.exceptions.Forbidden):
+            chameleon.delete("server", "s")
 
 
 @skipUnless(HAS_CHI, "python-chi is not installed")

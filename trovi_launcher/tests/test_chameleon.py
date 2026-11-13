@@ -1,6 +1,11 @@
 import base64
 import importlib.util
+import subprocess
+import tarfile
+import tempfile
+import zipfile
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from unittest import TestCase, mock, skipUnless
 
 from trovi_launcher.provisioner import status
@@ -12,6 +17,10 @@ if HAS_CHI:
 KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5 user@host"
 
 
+def http(url):
+    return {"protocol": "http", "url": url, "method": "GET", "headers": {}, "exp": 0}
+
+
 def params(**overrides):
     return {
         "id": "abc",
@@ -20,8 +29,17 @@ def params(**overrides):
         "lease_duration_hours": 2,
         "lease_id": "",
         "ssh_public_key": KEY,
-        "contents_remote": "https://github.com/org/repo.git",
-        "contents_ref": "abc123",
+        # In Trovi's order, which lists http before git
+        "contents": [
+            http("https://github.com/org/repo/archive/abc123.zip"),
+            {
+                "protocol": "git",
+                "remote": "https://github.com/org/repo.git",
+                "ref": "abc123",
+                "env": {},
+                "exp": 0,
+            },
+        ],
     } | overrides
 
 
@@ -151,8 +169,8 @@ class ChameleonTests(TestCase):
             "trovi-abc", duration=timedelta(hours=3)
         )
 
-    def test_skips_contents_without_a_repository(self):
-        self.provision(contents_remote="")
+    def test_skips_contents_without_access_methods(self):
+        self.provision(contents=[])
 
         self.assertNotIn("user_data", self.server.submit.call_args.kwargs)
 
@@ -177,3 +195,27 @@ class ChameleonTests(TestCase):
         self.mocks["get_lease"].return_value.delete.assert_called_once_with()
         self.mocks["get_lease"].assert_called_once_with("l")
         self.mocks["nova"].return_value.servers.delete.assert_called_once_with("s")
+
+
+@skipUnless(HAS_CHI, "python-chi is not installed")
+class FetchCommandTests(TestCase):
+    def test_downloads_and_unpacks_http_contents(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        source = Path(directory.name)
+        (source / "README").write_text("hi")
+        with zipfile.ZipFile(source / "repo-v1.zip", "w") as archive:
+            archive.writestr("repo/README", "hi")
+        with tarfile.open(source / "repo.tar.gz", "w:gz") as archive:
+            archive.add(source / "README", "README")
+
+        for name, fetched in [
+            ("repo-v1.zip", "repo-v1/repo/README"),
+            ("repo.tar.gz", "repo/README"),
+            ("README", "README"),
+        ]:
+            with self.subTest(name):
+                home = Path(tempfile.mkdtemp(dir=source))
+                command = chameleon.fetch_command([http((source / name).as_uri())])
+                subprocess.run(command, shell=True, cwd=home, check=True)
+                self.assertEqual((home / fetched).read_text(), "hi")

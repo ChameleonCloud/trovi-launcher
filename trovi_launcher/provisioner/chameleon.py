@@ -9,17 +9,20 @@ It understands these arguments, and ignores any others:
 - lease_id: launch on this existing lease. Without it, node_type and
   lease_duration_hours are required, and a new lease is made.
 - image: the disk image, by default python-chi's default image.
-- contents_remote and contents_ref: a git repository that cloud-init clones
-  into cc's home directory at boot. The launch doesn't wait for the clone or
-  report its failure; /var/log/cloud-init-output.log on the node has why.
+- contents: the access methods of the artifact version's contents, as Trovi
+  lists them. At boot, cloud-init clones the git one into cc's home directory
+  or, without one, downloads and unpacks the http one. The launch doesn't wait
+  for that or report its failure; /var/log/cloud-init-output.log on the node
+  has why.
 """
 
 import base64
+import json
 import shlex
 import sys
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Optional
 
 import chi.clients
 import chi.lease
@@ -39,6 +42,32 @@ DELETE: dict[str, Callable[[str], object]] = {
     "keypair": lambda name: chi.clients.nova().keypairs.delete(name),
     "server": lambda server_id: chi.clients.nova().servers.delete(server_id),
 }
+# Runs on the node with the http access method as its argument. It's Python,
+# which cloud-init images always have, unlike curl or unzip, and sticks to what
+# Python 3.8 has for older images.
+DOWNLOAD = r"""
+import json, os, re, shutil, sys, tarfile, tempfile, zipfile
+from urllib.parse import unquote, urlparse
+from urllib.request import Request, urlopen
+
+method = json.loads(sys.argv[1])
+name = os.path.basename(unquote(urlparse(method["url"]).path)) or "contents"
+request = Request(method["url"], headers=method["headers"], method=method["method"])
+with urlopen(request) as response, tempfile.NamedTemporaryFile(delete=False) as f:
+    shutil.copyfileobj(response, f)
+directory = re.sub(r"\.(zip|tgz|tar|tar\.gz)$", "", name)
+if zipfile.is_zipfile(f.name):
+    with zipfile.ZipFile(f.name) as archive:
+        archive.extractall(directory)
+elif tarfile.is_tarfile(f.name):
+    with tarfile.open(f.name) as archive:
+        archive.extraction_filter = getattr(tarfile, "data_filter", None)
+        archive.extractall(directory)
+else:
+    shutil.move(f.name, name)
+    sys.exit()
+os.remove(f.name)
+"""
 
 
 def provision(launch: status.Launch) -> dict[str, str]:
@@ -130,7 +159,7 @@ def create_server(
     """Launch the node on the lease's node reservation and wait until it's up.
 
     The server is named name and uses the keypair of the same name, which
-    holds the user's key. With contents_remote, it clones that at boot. It is
+    holds the user's key. With contents, it fetches them at boot. It is
     tracked as soon as it has an ID. If it ends in ERROR, this raises with
     Nova's fault message, such as "No valid host was found".
     """
@@ -141,8 +170,8 @@ def create_server(
         key_name=name,
     )
     options = {}
-    if launch.params.get("contents_remote"):
-        options["user_data"] = user_data(launch.params)
+    if command := fetch_command(launch.params.get("contents", [])):
+        options["user_data"] = user_data(command)
     server.submit(wait_for_active=False, show=None, **options)
     server.refresh()
     launch.track("server", server.id)
@@ -172,28 +201,40 @@ def attach_floating_ip(server: chi.server.Server, lease: chi.lease.Lease) -> str
     return free[0]
 
 
-def user_data(params: dict[str, Any]) -> str:
-    """Return a boot script that runs clone_command as cc, encoded for Nova.
+def user_data(command: str) -> str:
+    """Return a boot script that runs command as cc, encoded for Nova.
 
     cloud-init runs it as root on the node's first boot. Nova takes user data
     base64-encoded, and openstacksdk's compute proxy doesn't encode it.
     """
-    script = f"#!/bin/sh\nsu - cc -c {shlex.quote(clone_command(params))}\n"
+    script = f"#!/bin/sh\nsu - cc -c {shlex.quote(command)}\n"
     return base64.b64encode(script.encode()).decode()
 
 
-def clone_command(params: dict[str, Any]) -> str:
-    """Return a shell command that clones contents_remote into the home directory.
+def fetch_command(methods: list[dict[str, Any]]) -> Optional[str]:
+    """Return a shell command that fetches contents into the home directory.
 
-    The clone goes in a directory named after the repository, and is checked
-    out at contents_ref if that is set.
+    With a git method, it clones the remote into a directory named after the
+    repository and checks out the method's ref. Otherwise, with an http method,
+    it downloads the URL and unpacks a zip or tar archive into a directory
+    named after the file; any other file is left as downloaded. Returns None
+    when there is neither.
     """
-    remote = params["contents_remote"]
-    directory = remote.rstrip("/").removesuffix(".git").rsplit("/", 1)[-1]
-    command = f"git clone -- {shlex.quote(remote)} {shlex.quote(directory)}"
-    if ref := params.get("contents_ref"):
-        command += f" && git -C {shlex.quote(directory)} checkout {shlex.quote(ref)}"
-    return command
+    first = {}
+    for method in methods:
+        first.setdefault(method["protocol"], method)
+    if git := first.get("git"):
+        remote = git["remote"]
+        directory = shlex.quote(
+            remote.rstrip("/").removesuffix(".git").rsplit("/", 1)[-1]
+        )
+        command = f"git clone -- {shlex.quote(remote)} {directory}"
+        if ref := git.get("ref"):
+            command += f" && git -C {directory} checkout {shlex.quote(ref)}"
+        return command
+    if http := first.get("http"):
+        return shlex.join(["python3", "-c", DOWNLOAD, json.dumps(http)])
+    return None
 
 
 def _utc(value: datetime) -> datetime:

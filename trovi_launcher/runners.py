@@ -5,6 +5,7 @@ import sys
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
+from django.utils.module_loading import import_string
 
 EXITED = "Provisioner exited without reporting a result"
 # Any command that follows the contract in trovi_launcher/provisioner/status.py
@@ -45,11 +46,16 @@ def _exists(pid):
     return True
 
 
-RUNNERS = {"local": LocalRunner}
+# Import paths, so a runner's dependencies are only needed if it's used
+RUNNERS = {
+    "local": "trovi_launcher.runners.LocalRunner",
+    "kubernetes": "trovi_launcher.k8s.KubernetesRunner",
+}
 
 
 def get(name):
     try:
-        return RUNNERS[name]()
+        path = RUNNERS[name]
     except KeyError:
         raise ImproperlyConfigured(f"Unknown trovi-launcher runner {name!r}")
+    return import_string(path)()

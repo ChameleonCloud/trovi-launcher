@@ -8,7 +8,7 @@ $(VENV):
 
 .PHONY: install
 install: $(VENV)
-	$(PYTHON) -m pip install -e '.[chi,dev]'
+	$(PYTHON) -m pip install -e '.[chi,dev,k8s]'
 
 .PHONY: test
 test:

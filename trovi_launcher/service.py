@@ -26,7 +26,7 @@ def create_launch(subject_token, callback_base_url, **fields):
 
     The provisioner reports to callback_base_url, the site root as it reaches it.
     """
-    launch = Launch(**fields, runner=settings.TROVI_LAUNCHER.get("RUNNER", "local"))
+    launch = Launch(**fields)
     launch.full_clean()
     _start(launch, credentials.resolve(launch, subject_token), callback_base_url)
     return launch
@@ -44,6 +44,8 @@ def clean_up_launch(launch, subject_token, callback_base_url):
 
 
 def _start(launch, env, callback_base_url, cleanup=None):
+    # Each run uses the runner set now, so a clean up can outlive a runner change
+    launch.runner = settings.TROVI_LAUNCHER.get("RUNNER", "local")
     runner = runners.get(launch.runner)
     token = secrets.token_urlsafe(32)
     launch.callback_token_hash = _hash(token)
@@ -65,8 +67,9 @@ def _provisioner_env(launch, token, callback_base_url, cleanup):
         "site": launch.site,
         "project": launch.project,
     }
+    base_url = settings.TROVI_LAUNCHER.get("CALLBACK_BASE_URL") or callback_base_url
     env = {
-        "CALLBACK_URL": urljoin(callback_base_url, path),
+        "CALLBACK_URL": urljoin(base_url, path),
         "CALLBACK_TOKEN": token,
         "LAUNCH_PARAMS": json.dumps(params),
     }

@@ -12,6 +12,7 @@ dependencies = ["Django>=5.2", "keystoneauth1", "requests"]
 [project.optional-dependencies]
 chi = ["python-chi>=1.2"]
 dev = ["black", "flake8", "flake8-bugbear"]
+k8s = ["kubernetes"]
 
 [tool.setuptools.packages.find]
 include = ["trovi_launcher*"]

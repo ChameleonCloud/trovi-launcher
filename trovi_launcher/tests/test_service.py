@@ -3,7 +3,7 @@ from datetime import timedelta
 from unittest import mock
 
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -57,6 +57,13 @@ class ServiceTests(TestCase):
                 "lease_duration_hours": 2,
             },
         )
+
+    @override_settings(TROVI_LAUNCHER={"CALLBACK_BASE_URL": "http://host.test:8890/"})
+    def test_callback_base_url_setting(self):
+        launch = self.create()
+
+        path = reverse("trovi_launcher:events", args=[launch.id])
+        self.assertEqual(self.env()["CALLBACK_URL"], f"http://host.test:8890{path}")
 
     def test_arguments_cannot_replace_launch_fields(self):
         self.create(arguments={"id": "other", "project": "other", "cleanup": "x"})
@@ -152,6 +159,21 @@ class ServiceTests(TestCase):
             {"status": "deleted", "data": {"deleted": ["server", "s"]}},
         )
         self.assertEqual(launch.resources(), [["lease", "l"]])
+
+    def test_clean_up_uses_the_current_runner(self):
+        launch = self.create()
+        token = self.env()["CALLBACK_TOKEN"]
+        service.record_event(launch, token, {"data": {"created": ["lease", "l"]}})
+        service.record_event(launch, token, {"status": "ready"})
+        self.assertEqual(launch.runner, "local")
+
+        with self.settings(TROVI_LAUNCHER={"RUNNER": "kubernetes"}):
+            service.clean_up_launch(
+                launch, subject_token="token", callback_base_url=CALLBACK
+            )
+
+        launch.refresh_from_db()
+        self.assertEqual(launch.runner, "kubernetes")
 
     def test_clean_up_skips_active_and_empty_launches(self):
         launch = self.create()

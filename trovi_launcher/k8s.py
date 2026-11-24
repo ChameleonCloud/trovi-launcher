@@ -14,7 +14,7 @@ DEFAULT_PROVISIONER = ["python", "-m", "trovi_launcher.provisioner.chameleon"]
 NAMESPACE_FILE = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 # Longer than the provisioner's lease, server and SSH timeouts together
 DEADLINE = 2 * 60 * 60
-# Long enough for a cancelled provisioner to delete its lease and server
+# Long enough for a canceled provisioner to delete its lease and server
 GRACE_PERIOD = 120
 
 
@@ -88,7 +88,7 @@ class KubernetesRunner:
             # break. The launch's deadline still applies.
             LOG.warning("Could not read job %s: %s", launch.runner_ref, e)
             return None
-        # A Job being deleted has been cancelled, and its provisioner is
+        # A Job being deleted has been canceled, and its provisioner is
         # deleting what it created
         if job.metadata.deletion_timestamp:
             return None

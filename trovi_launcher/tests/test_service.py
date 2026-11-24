@@ -220,9 +220,9 @@ class ServiceTests(TestCase):
         launch.refresh_from_db()
         service.reconcile(launch)
         service.record_event(launch, token, {"data": {"deleted": ["lease", "l"]}})
-        service.record_event(launch, token, {"status": "cancelled"})
+        service.record_event(launch, token, {"status": "canceled"})
 
-        self.assertEqual(launch.status, Launch.Status.CANCELLED)
+        self.assertEqual(launch.status, Launch.Status.CANCELED)
         self.assertEqual(launch.resources(), [])
 
     def test_reconcile_leaves_running_launch(self):

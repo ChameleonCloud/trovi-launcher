@@ -53,7 +53,7 @@ class LocalRunnerTests(LiveServerTestCase):
         launch = self.launch(FAKE_PROVISIONER_DELAY="0.5")
         self.wait_for(launch, Launch.Status.RUNNING)
         service.cancel_launch(launch)
-        self.wait_for(launch, Launch.Status.CANCELLED)
+        self.wait_for(launch, Launch.Status.CANCELED)
 
     def test_reconcile_after_crash(self):
         launch = self.launch(FAKE_PROVISIONER_DELAY="5")

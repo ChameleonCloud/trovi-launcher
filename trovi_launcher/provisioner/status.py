@@ -10,7 +10,7 @@ TROVI_LAUNCHER setting). Any command that follows this contract can be one:
   resources instead of launching.
 - OS_* are OpenStack credentials scoped to the launch's project.
 - POST each event as JSON to CALLBACK_URL, with CALLBACK_TOKEN as a bearer
-  token. An event has a status (running, then ready, failed, cancelled or
+  token. An event has a status (running, then ready, failed, canceled or
   deleted) and optionally a step, level, message, result (anything the user
   should see, such as an IP address) and data, which records each resource
   as {"created": [kind, id]} or {"deleted": [kind, id]}.
@@ -19,7 +19,7 @@ TROVI_LAUNCHER setting). Any command that follows this contract can be one:
 A Python provisioner can call run(provision, delete) and leave the rest of
 the contract to this module. provision(launch) calls launch.track for each
 resource as soon as it exists, and returns the launch's result. If it
-raises or the launch is cancelled, everything tracked is deleted. Whatever
+raises or the launch is canceled, everything tracked is deleted. Whatever
 is still tracked once the launch is ready is deleted by a later clean up,
 in another process, so delete(kind, id) must work from the ID alone.
 """
@@ -39,7 +39,7 @@ import requests
 Delete = Callable[[str, str], None]
 
 
-class Cancelled(BaseException):
+class Canceled(BaseException):
     """Raised in the provisioner when the launcher cancels the launch.
 
     It's a BaseException, so library code that catches Exception can't
@@ -145,9 +145,9 @@ def run(provision: Provision, delete: Delete) -> int:
         return _clean_up(launch)
     try:
         result = provision(launch)
-    except Cancelled:
+    except Canceled:
         launch.delete_created()
-        launch.report(status="cancelled", message="Launch cancelled")
+        launch.report(status="canceled", message="Launch canceled")
         return 1
     except Exception as e:
         launch.delete_created()
@@ -175,4 +175,4 @@ def _clean_up(launch: Launch) -> int:
 
 
 def _cancel(signum: int, frame: FrameType | None) -> NoReturn:
-    raise Cancelled()
+    raise Canceled()

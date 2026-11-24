@@ -9,7 +9,7 @@ class Launch(models.Model):
         RUNNING = "running"
         READY = "ready"
         FAILED = "failed"
-        CANCELLED = "cancelled"
+        CANCELED = "canceled"
         DELETED = "deleted"
 
     ACTIVE = [Status.PENDING, Status.RUNNING]

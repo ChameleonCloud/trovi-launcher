@@ -40,7 +40,7 @@ class Migration(migrations.Migration):
                             ("running", "Running"),
                             ("ready", "Ready"),
                             ("failed", "Failed"),
-                            ("cancelled", "Cancelled"),
+                            ("canceled", "Canceled"),
                             ("deleted", "Deleted"),
                         ],
                         default="pending",

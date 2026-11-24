@@ -83,10 +83,10 @@ class RunTests(TestCase):
         )
 
     def test_cancel_deletes_created_resources(self):
-        self.assertEqual(self.run_status(failing(status.Cancelled())), 1)
+        self.assertEqual(self.run_status(failing(status.Canceled())), 1)
 
         self.assertEqual(self.deleted, ["server", "lease"])
-        self.assertEqual(self.events[-1]["status"], "cancelled")
+        self.assertEqual(self.events[-1]["status"], "canceled")
 
     def test_failed_delete_is_a_warning(self):
         self.run_status(failing(RuntimeError()), fail_delete=["server"])

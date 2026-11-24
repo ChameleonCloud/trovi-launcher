@@ -1,0 +1,41 @@
+---
+name: reviewdog
+
+on:
+  - pull_request
+
+jobs:
+  black:
+    name: runner / black
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - uses: psf/black@stable
+  flake8:
+    name: runner / flake8
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      # setup.cfg selects bugbear's B950 in place of E501
+      - run: pip install flake8 flake8-bugbear
+      - uses: reviewdog/action-flake8@v3
+        with:
+          github_token: ${{ secrets.github_token }}
+          reporter: github-pr-review
+          filter_mode: added
+          level: warning
+  misspell:
+    name: runner / misspell
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: reviewdog/action-misspell@v1
+        with:
+          github_token: ${{ secrets.github_token }}
+          locale: "US"
